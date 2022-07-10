@@ -31,6 +31,7 @@ int main(int argc, char *argv[])
     app.add_option("--target-edge-length", args.target_edge_len, "Absolute target edge length l.");                                       //absolute value fore edge length
     app.add_option("--target-edge-length-r", args.edge_length_r, "Relative target edge length l_r. Absolute l = l_r * diagonal_of_bbox"); //relative value for edge length
                                                                                                                                           //    app.add_option("--dd", args.i_dd, "");
+    app.add_option("--background-sizing-mesh", args.bg_mesh, "Background mesh for custom element sizing.");
     app.add_option("--log-file", args.log_file, "Output a log file.");
     app.add_option("--min-angle", args.flat_feature_angle, "Desired minimal angle.");
 
@@ -159,6 +160,7 @@ int main(int argc, char *argv[])
     cout << "BSP subdivision..." << endl;
     igl_timer.start();
     MeshData mesh;
+    mesh.bg_mesh = args.bg_mesh;
     std::vector<std::vector<int>> tag_boundary_es;
     triangulation::BSP_subdivision(V, edges, mesh, tag_boundary_es, b_tree);
     t = igl_timer.getElapsedTime();

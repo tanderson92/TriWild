@@ -225,6 +225,8 @@ void triwild::optimization::init(const Eigen::MatrixXd& V, const std::vector<std
 //    pausee();
 }
 
+#include "../../extern/pymesh/MshLoader.h"
+typedef Eigen::Matrix<float, 3, 1> Vector3;
 void triwild::optimization::refine(MeshData& mesh, GEO::MeshFacetsAABB &b_tree, const std::array<int, 4>& ops) {
     //preprocessing
     if(!args.is_preserving_feature)
@@ -312,6 +314,83 @@ void triwild::optimization::refine(MeshData& mesh, GEO::MeshFacetsAABB &b_tree, 
     }
     operation(mesh, b_tree, std::array<int, 4>({0, 1, 0, 0}));
 
+    // apply background sizing field
+    if (!mesh.bg_mesh.empty()) {
+        PyMesh::MshLoader mshLoader(mesh.bg_mesh);
+        Eigen::VectorXd V_sizing_field = mshLoader.get_nodes();
+        Eigen::VectorXi T_sizing_field = mshLoader.get_elements();
+        Eigen::VectorXd values = mshLoader.get_node_field("values");
+
+        // Set up the background sizing field mesh
+        GEO::Mesh bg_mesh;
+        bg_mesh.vertices.clear();
+        bg_mesh.vertices.create_vertices( (int) V_sizing_field.rows() / 3 );
+        for (int i = 0; i < V_sizing_field.rows() / 3; i++) {
+            GEO::vec3& p = bg_mesh.vertices.point(i);
+            p[0] = V_sizing_field(i * 3 + 0);
+            p[1] = V_sizing_field(i * 3 + 1);
+            p[2] = V_sizing_field(i * 3 + 2);
+        }
+        bg_mesh.facets.clear();
+        bg_mesh.facets.create_triangles( (int) T_sizing_field.rows() / 3 );
+        for (int i = 0; i < T_sizing_field.rows() / 3; i++) {
+            bg_mesh.facets.set_vertex(i, 0, T_sizing_field(i * 3 + 0));
+            bg_mesh.facets.set_vertex(i, 1, T_sizing_field(i * 3 + 1));
+            bg_mesh.facets.set_vertex(i, 2, T_sizing_field(i * 3 + 2));
+        }
+        GEO::MeshFacetsAABB bg_aabb(bg_mesh, false);
+
+        auto get_sizing_field_value = [&](const Point_2f& p) {
+            GEO::vec3 geo_p((double) p.x, (double) p.y, (double) 0.);
+            // We don't need nearest_point, sq_dist;
+            // note most recent GEO has more precise nearest_facet signature
+            GEO::vec3 nearest_point;
+            double sq_dist;
+            // find containing triangle in background mesh
+            int bg_t_id = bg_aabb.nearest_facet(geo_p, nearest_point, sq_dist);
+            double det;
+            double l1, l2, l3;
+            double value;
+
+            //form vector of vertices for this triangle
+            std::array<Vector3, 3> vs;
+            for (int j = 0; j < 3; j++) {
+                vs[j] = Vector3(V_sizing_field(T_sizing_field(bg_t_id * 3 + j) * 3 + 0),
+                                V_sizing_field(T_sizing_field(bg_t_id * 3 + j) * 3 + 1),
+                                V_sizing_field(T_sizing_field(bg_t_id * 3 + j) * 3 + 2));
+            }
+
+            // compute the barycentric coordinates
+            det = (vs[1][1] - vs[0][1]) * (vs[0][0] - vs[2][0]) +
+                    (vs[2][0] - vs[1][0]) * (vs[0][1] - vs[2][1]);
+            l1 = ((vs[1][1] - vs[2][1]) * (p[0] - vs[2][0]) +
+                    (vs[2][0] - vs[1][0]) * (p[1] - vs[2][1])) / det;
+            l2 = ((vs[2][1] - vs[0][1]) * (p[0] - vs[2][0]) +
+                    (vs[0][0] - vs[2][0]) * (p[1] - vs[2][1])) / det;
+            l3 = 1. - l1 - l2;
+            value = l1 * values(T_sizing_field(bg_t_id * 3 + 0)) +
+                    l2 * values(T_sizing_field(bg_t_id * 3 + 1)) +
+                    l3 * values(T_sizing_field(bg_t_id * 3 + 2));
+            return value;
+        };
+
+        is_hit_min_edge_length = false;
+        double min_refine_scale = mesh.min_scalar;
+        for (int i = 0; i < mesh.tri_vertices.size(); i++) {
+            double new_scale = mesh.tri_vertices[i].scale * get_sizing_field_value(mesh.tri_vertices[i].posf);
+            if (new_scale > 1)
+                mesh.tri_vertices[i].scale = 1;
+            else if (new_scale < min_refine_scale) {
+                is_hit_min_edge_length = true;
+                mesh.tri_vertices[i].scale = min_refine_scale;
+            } else
+              mesh.tri_vertices[i].scale = new_scale;
+        }
+        cout<<"is_hit_min_edge_length = "<<is_hit_min_edge_length<<endl;
+        for (int i = 0; i < 10; i++) {
+            operation(mesh, b_tree, ops);
+        }
+    }
 //    if(args.is_preserving_feature)
 //        feature::visualize_features(mesh);
 }

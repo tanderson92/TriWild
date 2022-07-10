@@ -49,6 +49,7 @@ namespace triwild {
         bool mute_log = false;
         double flat_feature_angle = 10;
         double min_edge_length;
+        std::string bg_mesh;
 
         //variables
         std::string first_triangulation = "delaunay";

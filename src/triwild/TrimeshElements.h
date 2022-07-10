@@ -84,6 +84,8 @@ namespace triwild {
         double dd;
         int max_its = 80;
         double stop_energy = 10;
+        // background mesh and associated sizing values
+        std::string bg_mesh;
 
         double feature_epsilon;
         double min_scalar = 0;
