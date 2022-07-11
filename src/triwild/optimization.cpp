@@ -377,10 +377,8 @@ void triwild::optimization::refine(MeshData& mesh, GEO::MeshFacetsAABB &b_tree, 
         is_hit_min_edge_length = false;
         double min_refine_scale = mesh.min_scalar;
         for (int i = 0; i < mesh.tri_vertices.size(); i++) {
-            double new_scale = mesh.tri_vertices[i].scale * get_sizing_field_value(mesh.tri_vertices[i].posf);
-            if (new_scale > 1)
-                mesh.tri_vertices[i].scale = 1;
-            else if (new_scale < min_refine_scale) {
+            double new_scale = get_sizing_field_value(mesh.tri_vertices[i].posf) / mesh.ideal_edge_length;
+            if (new_scale < min_refine_scale) {
                 is_hit_min_edge_length = true;
                 mesh.tri_vertices[i].scale = min_refine_scale;
             } else
