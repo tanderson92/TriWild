@@ -350,6 +350,8 @@ void triwild::optimization::refine(MeshData& mesh, GEO::MeshFacetsAABB &b_tree, 
             int bg_t_id = bg_aabb.nearest_facet(geo_p, nearest_point, sq_dist);
             double det;
             double l1, l2, l3;
+            double x1, x2, x3, y1, y2, y3;
+            double area;
             double value;
 
             //form vector of vertices for this triangle
@@ -361,13 +363,17 @@ void triwild::optimization::refine(MeshData& mesh, GEO::MeshFacetsAABB &b_tree, 
             }
 
             // compute the barycentric coordinates
-            det = (vs[1][1] - vs[0][1]) * (vs[0][0] - vs[2][0]) +
-                    (vs[2][0] - vs[1][0]) * (vs[0][1] - vs[2][1]);
-            l1 = ((vs[1][1] - vs[2][1]) * (p[0] - vs[2][0]) +
-                    (vs[2][0] - vs[1][0]) * (p[1] - vs[2][1])) / det;
-            l2 = ((vs[2][1] - vs[0][1]) * (p[0] - vs[2][0]) +
-                    (vs[0][0] - vs[2][0]) * (p[1] - vs[2][1])) / det;
-            l3 = 1. - l1 - l2;
+            x1 = vs[0][0];
+            x2 = vs[1][0];
+            x3 = vs[2][0];
+            y1 = vs[0][1];
+            y2 = vs[1][1];
+            y3 = vs[2][1];
+            // twice the signed area
+            area = x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2);
+            l1 = 1./area * (x2*y3 - x3*y2 + p[0] * (y2 - y3) + p[1] * (x3 - x2));
+            l2 = 1./area * (x3*y1 - x1*y3 + p[0] * (y3 - y1) + p[1] * (x1 - x3));
+            l3 = 1./area * (x1*y2 - x2*y1 + p[0] * (y1 - y2) + p[1] * (x2 - x1));
             value = l1 * values(T_sizing_field(bg_t_id * 3 + 0)) +
                     l2 * values(T_sizing_field(bg_t_id * 3 + 1)) +
                     l3 * values(T_sizing_field(bg_t_id * 3 + 2));
@@ -381,8 +387,10 @@ void triwild::optimization::refine(MeshData& mesh, GEO::MeshFacetsAABB &b_tree, 
             if (new_scale < min_refine_scale) {
                 is_hit_min_edge_length = true;
                 mesh.tri_vertices[i].scale = min_refine_scale;
-            } else
+            } else {
+              cout << "raw_scale: " << get_sizing_field_value(mesh.tri_vertices[i].posf) << ", new_scale: " << new_scale << ", prev_scale: " << mesh.tri_vertices[i].scale << endl;
               mesh.tri_vertices[i].scale = new_scale;
+            }
         }
         cout<<"is_hit_min_edge_length = "<<is_hit_min_edge_length<<endl;
         for (int i = 0; i < 10; i++) {
